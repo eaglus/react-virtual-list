@@ -139,14 +139,12 @@ export function VirtualScroll<T extends { key: string | number }>(props: Virtual
         ];
 
         //edge case check (case at end of data)
-        if (newRange[0] !== rangeTop || newRange[1] !== rangeBottom) {
+        if (newRange[0] !== rangeTop || newRange[1] !== rangeBottom || scrollHeight - scrollBottom < 1) {
+          //if we are at end of scroll, cause re-render with current range to run
+          //useLayoutEffect validating range and calling onLoad/extending range 
           console.log('set new range: ', newRange.join(' - '));
           setRenderRange(newRange);
         }
-      } else if (Math.floor(scrollBottom) === Math.floor(scrollHeight)) {
-        //if we are at end of scroll, cause re-render with current range to run
-        //useLayoutEffect validating range and calling onLoad/extending range 
-        setRenderRange([rangeTop, rangeBottom]);
       }
     };
     rootRef.current?.addEventListener('scroll', onScroll);
