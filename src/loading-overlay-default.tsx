@@ -1,4 +1,4 @@
-export function LoadingOverlay() {
+export function LoadingOverlayDefault() {
   return (
     <div 
       style={{

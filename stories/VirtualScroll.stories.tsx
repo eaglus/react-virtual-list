@@ -1,66 +1,82 @@
-import { Children, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ComponentStory, ComponentMeta } from '@storybook/react';
 
-import { getData, DataItem } from './mock-api';
 import { VirtualScroll } from '../src/virtual-scroll';
+
+import { getData, DataItem } from './mock-api';
+import { Root, Row } from './styles'; 
 
 interface StoryProps {
   totalDataCount: number;
-  chunkSize: number;
+  loadChunkSize: number;
+  overscrollRowsCount: number;
+  onLoadMore: (start: number) => void;
 }
-
-export default {
-  title: 'VirtualScroll',
-  component: StoryContainer
-} as ComponentMeta<typeof StoryContainer>;
 
 const LOAD_CHUNK_SIZE = 100;
 const TOTAL_DATA_COUNT = 100000;
 
+export default {
+  title: 'VirtualScroll',
+  component: StoryContainer,
+  argTypes: {
+    onLoadMore: { action: 'onLoadMore' },
+    totalDataCount: { control: { type: 'number', min: 0, max: TOTAL_DATA_COUNT, step: 10 } },
+    loadChunkSize: { control: { type: 'number', min: 1, step: 10 } },
+    overscrollRowsCount: { control: { type: 'number', min: 1 } },
+  }
+} as ComponentMeta<typeof StoryContainer>;
+
 function StoryContainer(props: StoryProps) {
-  const { totalDataCount, chunkSize } = props;
+  const { totalDataCount, loadChunkSize, onLoadMore: onLoadMoreProp } = props;
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DataItem[]>([]);
 
   const onLoadMore = useCallback(async (start: number) => {
-    console.log('onLoadMore', start, ' - ', start + chunkSize);
+    console.log('onLoadMore', start, ' - ', start + loadChunkSize);
     if (start < totalDataCount) {
+      onLoadMoreProp?.(start);
       setLoading(true);
       try {
         const chunk = await getData({
           offset: start,
-          pageSize: chunkSize
+          pageSize: loadChunkSize
         });
         setData(data => [...data, ...chunk]);
       } finally {
         setLoading(false);
       }
     }
-  }, [totalDataCount, chunkSize]);
+  }, [totalDataCount, loadChunkSize, onLoadMoreProp]);
 
-  const renderRow = useCallback((data: DataItem, index: number) => {
+  const renderRow = useCallback((data: DataItem) => {
     return (
-      <div
+      <Row
         style={{ 
           height: data.height, 
-          border: '1px solid gray',
-          display: 'flex',
-          alignItems: 'center' 
         }}
       >
-          {data.description}
-      </div>
+        {data.description}
+      </Row>
     );
   }, []);
 
+  const onClearClick = useCallback(() => {
+    setData([]);
+  }, []);
+
   return (
-    <VirtualScroll<DataItem> 
-      data={data}
-      loading={loading}
-      onLoadMore={onLoadMore} 
-      renderRow={renderRow}
-      height={400}  
-    />
+    <Root>
+      <VirtualScroll<DataItem> 
+        data={data}
+        loading={loading}
+        onLoadMore={onLoadMore} 
+        renderRow={renderRow}
+        height={400}  
+      />
+
+      <button onClick={onClearClick}>Clear data</button>
+    </Root>
   );
 }
 
@@ -70,5 +86,6 @@ export const VirtualScrollSample: ComponentStory<typeof StoryContainer> = Templa
 
 VirtualScrollSample.args = {
   totalDataCount: TOTAL_DATA_COUNT,
-  chunkSize: LOAD_CHUNK_SIZE
-};
+  loadChunkSize: LOAD_CHUNK_SIZE,
+  overscrollRowsCount: 10
+}; 
