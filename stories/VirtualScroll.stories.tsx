@@ -1,10 +1,8 @@
 import { useCallback, useState } from 'react';
 import { ComponentStory, ComponentMeta } from '@storybook/react';
 
-import { VirtualScroll } from '../src/virtual-scroll';
-
 import { getData, DataItem } from './mock-api';
-import { Root, Row } from './styles'; 
+import { Root, Row, VirtualScroll, GlobalStyle } from './styles'; 
 
 interface StoryProps {
   totalDataCount: number;
@@ -53,7 +51,7 @@ function StoryContainer(props: StoryProps) {
     return (
       <Row
         style={{ 
-          height: data.height, 
+          minHeight: data.height, 
         }}
       >
         {data.description}
@@ -66,17 +64,19 @@ function StoryContainer(props: StoryProps) {
   }, []);
 
   return (
-    <Root>
-      <VirtualScroll<DataItem> 
-        data={data}
-        loading={loading}
-        onLoadMore={onLoadMore} 
-        renderRow={renderRow}
-        height={400}  
-      />
+    <>
+      <GlobalStyle />
+      <Root>
+        <VirtualScroll 
+          data={data}
+          loading={loading}
+          onLoadMore={onLoadMore} 
+          renderRow={renderRow}
+        />
 
-      <button onClick={onClearClick}>Clear data</button>
-    </Root>
+        <button onClick={onClearClick}>Clear data</button>
+      </Root>
+    </>
   );
 }
 

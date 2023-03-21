@@ -1,6 +1,6 @@
 export function LoadingOverlayDefault() {
   return (
-    <div 
+    <div
       style={{
         position: 'absolute',
         display: 'flex',
@@ -13,7 +13,7 @@ export function LoadingOverlayDefault() {
         bottom: 0
       }}
     >
-      <div 
+      <div
         style={{
           position: 'absolute',
           backgroundColor: 'black',
@@ -24,9 +24,7 @@ export function LoadingOverlayDefault() {
           bottom: 0
         }}
       />
-      <div style={{}}>
-        Loading...
-      </div>
+      <div style={{}}>Loading...</div>
     </div>
   );
 }
