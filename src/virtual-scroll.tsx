@@ -67,19 +67,19 @@ export function VirtualScroll<T extends { key: string | number }>(
 
   const [rootHeight, setRootHeight] = useState(0);
 
-  const rootWidthPrev = useRef(0);
-
   useEffect(() => {
+    let rootWidthPrev: number | undefined = undefined;
     const rootElement = rootRef.current!;
     const observer = new ResizeObserver(() => {
       const newRootWidth = rootElement.clientWidth;
       const newRootHeight = rootElement.clientHeight;
-      if (newRootWidth !== rootWidthPrev.current) {
-        console.log('Root width changed, reset all');
-        rootWidthPrev.current = newRootWidth;
-        rowBottoms.current = [];
-        renderRangeRef.current = [0, 0];
-        setRenderRange(renderRangeRef.current);
+      if (newRootWidth !== rootWidthPrev) {
+        if (rootWidthPrev !== undefined) {
+          console.log('Root width changed, reset all');
+          rowBottoms.current = [];
+          setRenderRange([0, 0]);
+        }
+        rootWidthPrev = newRootWidth;
       }
       setRootHeight(newRootHeight);
     });
