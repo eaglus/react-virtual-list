@@ -28,4 +28,5 @@ export const VirtualScroll = styled(VirtualScrollUnstyled)`
   flex-shrink: 0;
   flex-basis: 0;
   height: 0%;
+  position: relative;
 `;
