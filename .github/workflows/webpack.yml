@@ -1,0 +1,41 @@
+name: Build and GH-Page Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Install
+        run: |
+          node --version
+          npm --version
+          npm ci
+
+      - name: Build
+        run: |
+          node --version
+          npm --version
+          npm run build-storybook
+
+      - name: Deploy to GH Page
+        uses: JamesIves/github-pages-deploy-action@4.1.1
+        with:
+          branch: gh-pages
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          folder: storybook-static
