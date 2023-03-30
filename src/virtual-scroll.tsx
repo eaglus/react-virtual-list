@@ -8,18 +8,7 @@ import {
   ComponentType,
   useCallback
 } from 'react';
-import {
-  ReactNode,
-  useRef,
-  useState,
-  useLayoutEffect,
-  useEffect,
-  CSSProperties,
-  ComponentType,
-  useCallback
-} from 'react';
 
-import { LoadingOverlayDefault } from './loading-overlay-default';
 import { LoadingOverlayDefault } from './loading-overlay-default';
 
 export interface VirtualScrollProps<T extends { key: string | number }> {
@@ -52,22 +41,6 @@ function findLowerBound(arr: number[], value: number) {
   return l;
 }
 
-export function VirtualScroll<T extends { key: string | number }>(
-  props: VirtualScrollProps<T>
-) {
-  const {
-    data,
-    loading,
-    renderRow,
-    onLoadMore,
-    className,
-    loadingOverlayComponent,
-    overscrollRowsCount = OVERSCROLL_ROWS_COUNT
-  } = props;
-
-  const LoadingOverlay = loadingOverlayComponent ?? LoadingOverlayDefault;
-
-  const [renderRange, setRenderRange] = useState([0, 0]);
 export function VirtualScroll<T extends { key: string | number }>(
   props: VirtualScrollProps<T>
 ) {
@@ -142,7 +115,7 @@ export function VirtualScroll<T extends { key: string | number }>(
     if (bottoms.length < renderRange[1]) {
       bottoms = [...bottoms];
       for (let i = bottoms.length; i < renderRange[1]; i++) {
-        const row = containerRef.current?.querySelector(`[data-index="${i}"]`)!;
+        const row = containerRef.current!.querySelector(`[data-index="${i}"]`)!;
         const height = row.getBoundingClientRect().height;
 
         renderedBottom += height;
@@ -194,7 +167,9 @@ export function VirtualScroll<T extends { key: string | number }>(
     //Find data row index (last with bottom lower than screen scroll top/start)
     const screenRangeTop = findLowerBound(rowBottomsRef.current, scrollTop);
     let screenRangeCnt = 0;
-    while (rowBottomsRef.current[screenRangeTop + screenRangeCnt] < scrollBottom) {
+    while (
+      rowBottomsRef.current[screenRangeTop + screenRangeCnt] < scrollBottom
+    ) {
       screenRangeCnt++;
     }
 

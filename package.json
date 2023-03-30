@@ -32,7 +32,9 @@
   "scripts": {
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook -- --quite",
-    "deploy": "gh-pages -d storybook-static"
+    "deploy": "gh-pages -d storybook-static",
+    "tsc": "tsc --noEmit",
+    "prettier": "prettier  -w src"
   },
   "dependencies": {
     "@types/styled-components": "^5.1.26",
