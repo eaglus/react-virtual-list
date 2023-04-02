@@ -57,11 +57,11 @@ export function VirtualScroll<T extends { key: string | number }>(
   const LoadingOverlay = loadingOverlayComponent ?? LoadingOverlayDefault;
 
   const [renderRange, setRenderRange] = useState([0, 0]);
+  const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
+  const [rowBottoms, setRowBottoms] = useState<number[]>([]);
 
-  const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const onLoadMoreRef = useRef(props.onLoadMore);
-  const [rowBottoms, setRowBottoms] = useState<number[]>([]);
   const rowBottomsRef = useRef(rowBottoms);
   const renderRangeRef = useRef(renderRange);
   const dataRef = useRef(data);
@@ -69,8 +69,11 @@ export function VirtualScroll<T extends { key: string | number }>(
   const [rootHeight, setRootHeight] = useState(0);
 
   useEffect(() => {
+    if (!rootElement) {
+      return;
+    }
+
     let rootWidthPrev: number | undefined = undefined;
-    const rootElement = rootRef.current!;
     const observer = new ResizeObserver(() => {
       const newRootWidth = rootElement.clientWidth;
       const newRootHeight = rootElement.clientHeight;
@@ -89,7 +92,7 @@ export function VirtualScroll<T extends { key: string | number }>(
       observer.unobserve(rootElement);
       observer.disconnect();
     };
-  }, []);
+  }, [rootElement]);
 
   useEffect(() => {
     renderRangeRef.current = renderRange;
@@ -107,6 +110,10 @@ export function VirtualScroll<T extends { key: string | number }>(
   }, [renderRange, rowBottoms, data, onLoadMore]);
 
   useLayoutEffect(() => {
+    if (!rootElement) {
+      return;
+    }
+
     let bottoms = rowBottomsRef.current;
 
     let renderedBottom = bottoms.length > 0 ? bottoms[bottoms.length - 1] : 0;
@@ -126,7 +133,7 @@ export function VirtualScroll<T extends { key: string | number }>(
 
     const renderRangeBottom = bottoms.length ? bottoms[renderRange[1] - 1] : 0;
 
-    const scrolledTop = Math.ceil(rootRef.current?.scrollTop ?? 0);
+    const scrolledTop = Math.ceil(rootElement.scrollTop ?? 0);
     const clientHeight = Math.ceil(rootHeight ?? 0);
     const scrolledBottom = clientHeight - scrolledTop;
 
@@ -156,13 +163,17 @@ export function VirtualScroll<T extends { key: string | number }>(
         onLoadMoreRef.current(data.length);
       }
     }
-  }, [data, renderRange, loading, rootHeight]);
+  }, [data, renderRange, loading, rootHeight, rootElement]);
 
   const onScroll = useCallback(() => {
-    const scrollTop = -rootRef.current!.scrollTop;
-    const clientHeight = rootRef.current!.clientHeight;
+    if (!rootElement) {
+      return;
+    }
+
+    const scrollTop = -rootElement.scrollTop;
+    const clientHeight = rootElement.clientHeight;
     const scrollBottom = scrollTop + clientHeight;
-    const scrollHeight = rootRef.current!.scrollHeight;
+    const scrollHeight = rootElement.scrollHeight;
 
     //Find data row index (last with bottom lower than screen scroll top/start)
     const screenRangeTop = findLowerBound(rowBottomsRef.current, scrollTop);
@@ -204,7 +215,7 @@ export function VirtualScroll<T extends { key: string | number }>(
         setRenderRange(newRange);
       }
     }
-  }, [overscrollRowsCount]);
+  }, [overscrollRowsCount, rootElement]);
 
   const renderedHeight = rowBottoms.length
     ? Math.ceil(rowBottoms[rowBottoms.length - 1])
@@ -231,7 +242,7 @@ export function VirtualScroll<T extends { key: string | number }>(
           } as CSSProperties
         }
         onScroll={onScroll}
-        ref={rootRef}
+        ref={setRootElement}
       >
         <div
           style={{
