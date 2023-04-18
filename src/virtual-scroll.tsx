@@ -52,10 +52,8 @@ function getRenderedHeight(rowBottoms: number[]) {
     : 0;
 }
 
-function getRenderedTopY(rowBottoms: number[], renderRange: number[]) {
-  const rowBottomsLn = rowBottoms.length;
-
-  return renderRange[0] < rowBottomsLn && renderRange[0] > 0
+function getRenderedTopY(rowBottoms: number[], renderRange: [number, number]) {
+  return renderRange[0] > 0
     ? rowBottoms[renderRange[0] - 1]
     : 0;
 }
@@ -75,52 +73,68 @@ export function VirtualScroll<T extends { key: string | number }>(
 
   const LoadingOverlay = loadingOverlayComponent ?? LoadingOverlayDefault;
 
-  const [renderRange, setRenderRange] = useState([0, 0]);
+  const [updateCnt, setUpdateCnt] = useState(0);
   const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
   const [rootHeight, setRootHeight] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const onLoadMoreRef = useRef(props.onLoadMore);
   const rowBottomsRef = useRef<number[]>([]);
-  const renderRangeRef = useRef(renderRange);
+  const renderRangeRef = useRef<[number, number]>([0, 0]);
   const dataRef = useRef(data);
 
-  const getRowHeight = useCallback((i: number) => {
-    const row = containerRef.current!.querySelector(`[data-index="${i}"]`)!;
-    return roundHeight(row.getBoundingClientRect().height);
-  }, []);
-
+  const runUpdate = useCallback(() => setUpdateCnt(cnt => cnt + 1), []);
   const updateRowHeights = useCallback(() => {
-    let bottoms = rowBottomsRef.current;
+    const bottoms = rowBottomsRef.current;
 
-    let updateDiff = 0;
     const [rangeStart, rangeEnd] = renderRangeRef.current;
 
     const updateEnd = Math.min(rangeEnd, bottoms.length);
-    for (let i = updateEnd - 1; i >= rangeStart; i--) {
-      const newHeight = getRowHeight(i);
-      const oldHeight = i > 0 ? bottoms[i] - bottoms[i - 1] : bottoms[i];
-      const diff = roundHeight(newHeight - oldHeight);
-      if (diff !== 0) {
-        console.log('DIFF', i, ' => ', diff, oldHeight, '=>', newHeight);
-      }
-      updateDiff += diff;
-      bottoms[i] += diff;
-    }
 
-    for (let i = bottoms.length; i < rangeEnd; i++) {
+    const getRowHeight = (i: number) => {
+      const row = containerRef.current!.querySelector(`[data-index="${i}"]`)!;
+      return roundHeight(row.getBoundingClientRect().height);
+    };
+
+    const getRangeHeight = () => {
+      const rangeTopPx = rangeStart > 0 ? bottoms[rangeStart - 1] : 0;
+      const rangeBottomPx = updateEnd > 0 ? bottoms[updateEnd - 1] : rangeTopPx;
+      return rangeBottomPx - rangeTopPx;
+    };
+
+    const oldRangeHeight = getRangeHeight();
+
+    let heightsUpdated = false;
+    for (let i = rangeStart; i < rangeEnd; i++) {
       const rowTop = i > 0 ? bottoms[i - 1] : 0;
       const bottom = rowTop + getRowHeight(i);
-      bottoms.push(bottom);
+      if (i < bottoms.length) {
+        heightsUpdated = heightsUpdated || bottoms[i] !== bottom;
+
+        bottoms[i] = bottom;
+      } else {
+        heightsUpdated = true;
+
+        bottoms.push(bottom);  
+      }
     }
 
+    const updateDiff = getRangeHeight() - oldRangeHeight;
     if (updateDiff !== 0) {
-      console.log('UPDATE WIDTH ', updateDiff, ' FROM ', rangeEnd, bottoms);
+      heightsUpdated = true;
+
+      console.log('updateRowHeights: updateDiff ', updateDiff, ' FROM ', rangeEnd, bottoms);
+
       for (let i = rangeEnd; i < bottoms.length; i++) {
         bottoms[i] = bottoms[i] + updateDiff;
       }
     }
-  }, [getRowHeight]);
+
+    if (heightsUpdated) {
+      console.log('updateRowHeights heights updated!');
+    }
+    return heightsUpdated;
+  }, []);
 
   useLayoutEffect(() => {
     if (!rootElement) {
@@ -137,11 +151,14 @@ export function VirtualScroll<T extends { key: string | number }>(
       const newRootHeight = rootElement.clientHeight;
 
       if (newRootWidth !== rootWidth) {
-        if (rootWidth !== undefined) {
-          console.log('Root width changed, update row heights');
-          updateRowHeights();
-        }
+        console.log('Root width changed, update row heights');
+
         rootWidth = newRootWidth;
+
+        const heightsUpdated = updateRowHeights();
+        if (heightsUpdated) {
+          runUpdate();
+        }
       }
       if (newRootHeight !== rootHeight) {
         rootHeight = newRootWidth;
@@ -153,10 +170,9 @@ export function VirtualScroll<T extends { key: string | number }>(
       observer.unobserve(rootElement);
       observer.disconnect();
     };
-  }, [rootElement, updateRowHeights]);
+  }, [rootElement, updateRowHeights, runUpdate]);
 
   useLayoutEffect(() => {
-    renderRangeRef.current = renderRange;
     dataRef.current = data;
     onLoadMoreRef.current = onLoadMore;
 
@@ -164,17 +180,21 @@ export function VirtualScroll<T extends { key: string | number }>(
     if (data.length < rowBottomsRef.current.length) {
       rowBottomsRef.current = [];
       renderRangeRef.current = [0, 0];
-      setRenderRange(renderRangeRef.current);
+      runUpdate();
     }
-  }, [renderRange, data, onLoadMore]);
+  }, [data, onLoadMore, runUpdate]);
 
   useLayoutEffect(() => {
     if (!rootElement) {
       return;
     }
 
-    updateRowHeights();
+    if (updateRowHeights()) {
+      runUpdate();
+      return;
+    }
 
+    const renderRange = renderRangeRef.current;
     const bottoms = rowBottomsRef.current;
     const renderRangeBottom = bottoms.length ? bottoms[renderRange[1] - 1] : 0;
 
@@ -194,7 +214,8 @@ export function VirtualScroll<T extends { key: string | number }>(
         );
         if (rangeEnd !== renderRange[1]) {
           console.log(`Extend render range: ${renderRange[0]} - ${rangeEnd}`);
-          setRenderRange([renderRange[0], rangeEnd]);
+          renderRangeRef.current = [renderRange[0], rangeEnd];
+          runUpdate();
         }
         //If there are less data than DATA_FETCH_CHUNK, emit load event, load more data
         if (
@@ -208,7 +229,7 @@ export function VirtualScroll<T extends { key: string | number }>(
         onLoadMoreRef.current(data.length);
       }
     }
-  }, [getRowHeight, updateRowHeights, data, renderRange, loading, rootHeight, rootElement]);
+  }, [updateRowHeights, runUpdate, data, updateCnt, loading, rootHeight, rootElement]);
 
   const onScroll = useCallback(() => {
     if (!rootElement) {
@@ -240,7 +261,7 @@ export function VirtualScroll<T extends { key: string | number }>(
       screenRangeTop < rangeTop ||
       screenRangeBottom > rangeBottom - SCROLL_SHIFT_GAP
     ) {
-      const newRange = [
+      const newRange: [number, number] = [
         Math.max(0, screenRangeTop - overscrollRowsCount),
         Math.min(
           dataRef.current.length,
@@ -257,13 +278,15 @@ export function VirtualScroll<T extends { key: string | number }>(
         //if we are at end of scroll, cause re-render with current range to run
         //useLayoutEffect validating range and calling onLoad/extending range
         console.log('set new range: ', newRange.join(' - '));
-        setRenderRange(newRange);
+        renderRangeRef.current = newRange;
+        runUpdate();
       }
     }
-  }, [overscrollRowsCount, rootElement]);
+  }, [overscrollRowsCount, rootElement, runUpdate]);
 
   const renderedHeight = getRenderedHeight(rowBottomsRef.current);
 
+  const renderRange = renderRangeRef.current;
   //move all rendered rows with transform in scroll coordinates by top for first rendered row
   const transformY = getRenderedTopY(rowBottomsRef.current, renderRange);
 
