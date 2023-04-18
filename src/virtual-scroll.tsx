@@ -3,7 +3,6 @@ import {
   useRef,
   useState,
   useLayoutEffect,
-  useEffect,
   CSSProperties,
   ComponentType,
   useCallback
@@ -41,6 +40,26 @@ function findLowerBound(arr: number[], value: number) {
   return l;
 }
 
+function roundHeight(value: number) {
+  return Math.floor(value);
+}
+
+function getRenderedHeight(rowBottoms: number[]) {
+  const rowBottomsLn = rowBottoms.length;
+
+  return rowBottomsLn
+    ? Math.ceil(rowBottoms[rowBottomsLn - 1])
+    : 0;
+}
+
+function getRenderedTopY(rowBottoms: number[], renderRange: number[]) {
+  const rowBottomsLn = rowBottoms.length;
+
+  return renderRange[0] < rowBottomsLn && renderRange[0] > 0
+    ? rowBottoms[renderRange[0] - 1]
+    : 0;
+}
+
 export function VirtualScroll<T extends { key: string | number }>(
   props: VirtualScrollProps<T>
 ) {
@@ -58,79 +77,105 @@ export function VirtualScroll<T extends { key: string | number }>(
 
   const [renderRange, setRenderRange] = useState([0, 0]);
   const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
-  const [rowBottoms, setRowBottoms] = useState<number[]>([]);
+  const [rootHeight, setRootHeight] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const onLoadMoreRef = useRef(props.onLoadMore);
-  const rowBottomsRef = useRef(rowBottoms);
+  const rowBottomsRef = useRef<number[]>([]);
   const renderRangeRef = useRef(renderRange);
   const dataRef = useRef(data);
 
-  const [rootHeight, setRootHeight] = useState(0);
+  const getRowHeight = useCallback((i: number) => {
+    const row = containerRef.current!.querySelector(`[data-index="${i}"]`)!;
+    return roundHeight(row.getBoundingClientRect().height);
+  }, []);
 
-  useEffect(() => {
-    if (!rootElement) {
-      return;
-    }
+  const updateRowHeights = useCallback(() => {
+    let bottoms = rowBottomsRef.current;
 
-    let rootWidthPrev: number | undefined = undefined;
-    const observer = new ResizeObserver(() => {
-      const newRootWidth = rootElement.clientWidth;
-      const newRootHeight = rootElement.clientHeight;
-      if (newRootWidth !== rootWidthPrev) {
-        if (rootWidthPrev !== undefined) {
-          console.log('Root width changed, reset all');
-          setRowBottoms([]);
-          setRenderRange([0, 0]);
-        }
-        rootWidthPrev = newRootWidth;
+    let updateDiff = 0;
+    const [rangeStart, rangeEnd] = renderRangeRef.current;
+
+    const updateEnd = Math.min(rangeEnd, bottoms.length);
+    for (let i = updateEnd - 1; i >= rangeStart; i--) {
+      const newHeight = getRowHeight(i);
+      const oldHeight = i > 0 ? bottoms[i] - bottoms[i - 1] : bottoms[i];
+      const diff = roundHeight(newHeight - oldHeight);
+      if (diff !== 0) {
+        console.log('DIFF', i, ' => ', diff, oldHeight, '=>', newHeight);
       }
-      setRootHeight(newRootHeight);
-    });
-    observer.observe(rootElement);
-    return () => {
-      observer.unobserve(rootElement);
-      observer.disconnect();
-    };
-  }, [rootElement]);
-
-  useEffect(() => {
-    renderRangeRef.current = renderRange;
-    rowBottomsRef.current = rowBottoms;
-    dataRef.current = data;
-    onLoadMoreRef.current = onLoadMore;
-
-    //If data count is changed down we suspect there are new data, new heights, and old range/heights should be reset
-    if (data.length < rowBottoms.length) {
-      rowBottomsRef.current = [];
-      renderRangeRef.current = [0, 0];
-      setRowBottoms(rowBottomsRef.current);
-      setRenderRange(renderRangeRef.current);
+      updateDiff += diff;
+      bottoms[i] += diff;
     }
-  }, [renderRange, rowBottoms, data, onLoadMore]);
+
+    for (let i = bottoms.length; i < rangeEnd; i++) {
+      const rowTop = i > 0 ? bottoms[i - 1] : 0;
+      const bottom = rowTop + getRowHeight(i);
+      bottoms.push(bottom);
+    }
+
+    if (updateDiff !== 0) {
+      console.log('UPDATE WIDTH ', updateDiff, ' FROM ', rangeEnd, bottoms);
+      for (let i = rangeEnd; i < bottoms.length; i++) {
+        bottoms[i] = bottoms[i] + updateDiff;
+      }
+    }
+  }, [getRowHeight]);
 
   useLayoutEffect(() => {
     if (!rootElement) {
       return;
     }
 
-    let bottoms = rowBottomsRef.current;
+    let rootWidth = rootElement.clientWidth;
+    let rootHeight = rootElement.clientHeight;
 
-    let renderedBottom = bottoms.length > 0 ? bottoms[bottoms.length - 1] : 0;
+    setRootHeight(rootHeight);
 
-    //Cache new-rendered row bottom borders
-    if (bottoms.length < renderRange[1]) {
-      bottoms = [...bottoms];
-      for (let i = bottoms.length; i < renderRange[1]; i++) {
-        const row = containerRef.current!.querySelector(`[data-index="${i}"]`)!;
-        const height = row.getBoundingClientRect().height;
+    const observer = new ResizeObserver(() => {
+      const newRootWidth = rootElement.clientWidth;
+      const newRootHeight = rootElement.clientHeight;
 
-        renderedBottom += height;
-        bottoms.push(renderedBottom);
+      if (newRootWidth !== rootWidth) {
+        if (rootWidth !== undefined) {
+          console.log('Root width changed, update row heights');
+          updateRowHeights();
+        }
+        rootWidth = newRootWidth;
       }
-      setRowBottoms(bottoms);
+      if (newRootHeight !== rootHeight) {
+        rootHeight = newRootWidth;
+        setRootHeight(newRootHeight);
+      }
+    });
+    observer.observe(rootElement);
+    return () => {
+      observer.unobserve(rootElement);
+      observer.disconnect();
+    };
+  }, [rootElement, updateRowHeights]);
+
+  useLayoutEffect(() => {
+    renderRangeRef.current = renderRange;
+    dataRef.current = data;
+    onLoadMoreRef.current = onLoadMore;
+
+    //If data count is changed down we suspect there are new data, new heights, and old range/heights should be reset
+    if (data.length < rowBottomsRef.current.length) {
+      rowBottomsRef.current = [];
+      renderRangeRef.current = [0, 0];
+      setRenderRange(renderRangeRef.current);
+    }
+  }, [renderRange, data, onLoadMore]);
+
+  useLayoutEffect(() => {
+    if (!rootElement) {
+      return;
     }
 
+    updateRowHeights();
+
+    const bottoms = rowBottomsRef.current;
     const renderRangeBottom = bottoms.length ? bottoms[renderRange[1] - 1] : 0;
 
     const scrolledTop = Math.ceil(rootElement.scrollTop ?? 0);
@@ -163,7 +208,7 @@ export function VirtualScroll<T extends { key: string | number }>(
         onLoadMoreRef.current(data.length);
       }
     }
-  }, [data, renderRange, loading, rootHeight, rootElement]);
+  }, [getRowHeight, updateRowHeights, data, renderRange, loading, rootHeight, rootElement]);
 
   const onScroll = useCallback(() => {
     if (!rootElement) {
@@ -186,7 +231,7 @@ export function VirtualScroll<T extends { key: string | number }>(
 
     //Last row on screen
     const screenRangeBottom = screenRangeTop + screenRangeCnt;
-
+    
     const [rangeTop, rangeBottom] = renderRangeRef.current;
 
     //If current rendered range run out of screen range (scrolled to empty, non-rendered scroll space)
@@ -217,17 +262,12 @@ export function VirtualScroll<T extends { key: string | number }>(
     }
   }, [overscrollRowsCount, rootElement]);
 
-  const renderedHeight = rowBottoms.length
-    ? Math.ceil(rowBottoms[rowBottoms.length - 1])
-    : 0;
-
-  const renderRangeData = data.slice(renderRange[0], renderRange[1]);
+  const renderedHeight = getRenderedHeight(rowBottomsRef.current);
 
   //move all rendered rows with transform in scroll coordinates by top for first rendered row
-  const transformY =
-    renderRange[0] < rowBottoms.length && renderRange[0] > 0
-      ? rowBottoms[renderRange[0] - 1]
-      : 0;
+  const transformY = getRenderedTopY(rowBottomsRef.current, renderRange);
+
+  const renderRangeData = data.slice(renderRange[0], renderRange[1])
 
   return (
     <div className={className}>
