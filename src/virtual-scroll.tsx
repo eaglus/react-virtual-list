@@ -5,7 +5,8 @@ import {
   useLayoutEffect,
   CSSProperties,
   ComponentType,
-  useCallback
+  useCallback,
+  
 } from 'react';
 
 import { LoadingOverlayDefault } from './loading-overlay-default';
@@ -23,6 +24,7 @@ export interface VirtualScrollProps<T extends { key: string | number }> {
 const DATA_FETCH_CHUNK = 20;
 const OVERSCROLL_ROWS_COUNT = 10;
 const START_LOAD_GAP = 30;
+const SCROLL_SHIFT_GAP = 3;
 
 function findLowerBound(arr: number[], value: number) {
   let l = 0;
@@ -254,7 +256,7 @@ export function VirtualScroll<T extends { key: string | number }>(
     rootElement
   ]);
 
-  const onScroll = useCallback(() => {
+  const onScroll = useCallback((e) => {
     if (!rootElement) {
       return;
     }
@@ -280,10 +282,10 @@ export function VirtualScroll<T extends { key: string | number }>(
 
     //If current rendered range run out of screen range (scrolled to empty, non-rendered scroll space)
     //move range to screen start (in row index units), end extend it with overscrollRowsCount
-    if (
-      screenRangeTop < rangeTop + overscrollRowsCount ||
-      screenRangeBottom > rangeBottom - overscrollRowsCount
-    ) {
+    const screenTopAtRangeTop = Math.max(0, screenRangeTop - SCROLL_SHIFT_GAP) < rangeTop;
+    const screenBottomAtRangeBottom = screenRangeBottom > rangeBottom - SCROLL_SHIFT_GAP;
+
+    if (screenTopAtRangeTop || screenBottomAtRangeBottom) {
       const newRange: [number, number] = [
         Math.max(0, screenRangeTop - overscrollRowsCount),
         Math.min(dataLength, screenRangeBottom + overscrollRowsCount)
